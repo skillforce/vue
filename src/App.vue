@@ -20,6 +20,17 @@
                 placeholder="Например DOGE"
               />
             </div>
+            <template v-if="hintsList">
+              <div class="flex">
+                <div
+                  class="border-2 w-1/4 rounded-lg m-1 text-center p-1.5 cursor-pointer bg-gray-700 text-white"
+                  v-for="(hint, i) in hintsList"
+                  :key="i"
+                >
+                  {{ hint }}
+                </div>
+              </div>
+            </template>
           </div>
         </div>
         <button
@@ -163,7 +174,7 @@ export default {
   methods: {
     add() {
       const currentTicker = {
-        name: this.ticker,
+        name: this.ticker.toUpperCase(),
         price: "-"
       };
 
@@ -204,11 +215,12 @@ export default {
     hintsGenerator() {
       if (/^[a-zA-Z0-9_.-]*$/.test(this.ticker)) {
         const hintsArr = this.kindOfTickers.filter(
-          (t) => t.indexOf(this.ticker) !== -1
+          (t) => t.indexOf(this.ticker.toUpperCase()) !== -1
         );
-        this.hints = hintsArr.splice(0, 4);
+        this.hintsList = hintsArr
+          .splice(0, 4)
+          .map((t) => t.match(/\((.*?)\)/)[1]);
       }
-      console.log(this.hints);
     }
   }
 };
