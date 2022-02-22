@@ -12,6 +12,7 @@
               <input
                 v-model="ticker"
                 @keydown.enter="add"
+                @keyup="hintsGenerator()"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -140,10 +141,25 @@ export default {
       ticker: "",
       tickers: [],
       sel: null,
-      graph: []
+      graph: [],
+      kindOfTickers: [],
+      hintsList: []
     };
   },
-
+  async created() {
+    const res = await fetch(
+      "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+    );
+    const { Data } = await res.json();
+    let correctTickersFullNameList = [];
+    for (let t in Data) {
+      // eslint-disable-next-line no-prototype-builtins
+      if (Data.hasOwnProperty(t)) {
+        correctTickersFullNameList.push(Data[t].FullName);
+      }
+    }
+    this.kindOfTickers = correctTickersFullNameList;
+  },
   methods: {
     add() {
       const currentTicker = {
@@ -184,6 +200,15 @@ export default {
       return this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
+    },
+    hintsGenerator() {
+      if (/^[a-zA-Z0-9_.-]*$/.test(this.ticker)) {
+        const hintsArr = this.kindOfTickers.filter(
+          (t) => t.indexOf(this.ticker) !== -1
+        );
+        this.hints = hintsArr.splice(0, 4);
+      }
+      console.log(this.hints);
     }
   }
 };
