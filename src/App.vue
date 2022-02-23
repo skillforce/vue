@@ -62,13 +62,38 @@
           </svg>
           Добавить
         </button>
+        <div>
+          <div>
+            Фильтр
+            <input
+              v-model="filter"
+              class="mt-1 block w-1/4 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+              type="text"
+            />
+          </div>
+          <div>
+            <button
+              @click="pageChangeBtn('decrement')"
+              v-if="page > 1"
+              class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              back
+            </button>
+            <button
+              v-if="filteredTickers().length === 6"
+              @click="pageChangeBtn('increment')"
+              class="my-4 ml-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              next
+            </button>
+          </div>
+        </div>
       </section>
-
       <template v-if="tickers.length">
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="t in tickers"
+            v-for="t in filteredTickers()"
             :key="t.name"
             @click="select(t)"
             :class="{
@@ -165,10 +190,22 @@ export default {
       graph: [],
       kindOfTickers: [],
       hintsList: [],
-      validationError: ""
+      validationError: "",
+      filter: "",
+      page: 1
     };
   },
   async created() {
+    const windowData = Object.fromEntries(
+      new URL(window.location).searchParams.entries()
+    );
+    if (windowData.filter) {
+      this.filter = windowData.filter;
+    }
+    if (windowData.page) {
+      this.page = windowData.page;
+    }
+    console.log(windowData);
     const oldTickers = localStorage.getItem("tickers");
     if (oldTickers) {
       this.tickers = JSON.parse(oldTickers);
@@ -193,6 +230,23 @@ export default {
       this.loadingStatus = "error";
     }
   },
+  watch: {
+    filter() {
+      this.page = 1;
+      window.history.pushState(
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+      );
+    },
+    page() {
+      window.history.pushState(
+        null,
+        document.title,
+        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+      );
+    }
+  },
   methods: {
     subscribeToUpdate(tickerName) {
       setInterval(async () => {
@@ -202,7 +256,7 @@ export default {
         const data = await f.json();
 
         this.tickers.find((t) => t.name === tickerName).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+          data.USD > 1 ? data.USD?.toFixed(2) : data.USD?.toPrecision(2);
 
         if (this.sel?.name === tickerName) {
           this.graph.push(data.USD);
@@ -228,6 +282,7 @@ export default {
         localStorage.setItem("tickers", JSON.stringify(this.tickers));
         this.hintsList = [];
         this.ticker = "";
+        this.filter = "";
         this.subscribeToUpdate(currentTicker.name);
       }
     },
@@ -270,6 +325,29 @@ export default {
       this.add();
       this.ticker = "";
       this.hintsList = [];
+    },
+    filteredTickers() {
+      const start = (this.page - 1) * 7;
+      const end = this.page * 7 - 1;
+      return this.tickers
+        .filter((t) => t.name.includes(this.filter.toUpperCase()))
+        .slice(start, end);
+    },
+    pageChangeBtn(method) {
+      switch (method) {
+        case "increment":
+          if (this.filteredTickers().length === 6) {
+            this.page = this.page + 1;
+          }
+          break;
+        case "decrement":
+          if (this.page > 1) {
+            this.page = this.page - 1;
+          }
+          break;
+        default:
+          break;
+      }
     }
   }
 };
