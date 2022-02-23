@@ -12,20 +12,28 @@
               <input
                 v-model="ticker"
                 @keydown.enter="add"
-                @keyup="hintsGenerator()"
+                @keyup="hintsGenerator($event)"
                 type="text"
                 name="wallet"
                 id="wallet"
                 class="block w-full pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
                 placeholder="Например DOGE"
+                :class="{
+                  'border-red-700 border-2 focus:ring-red-700 focus:border-red-700':
+                    validationError
+                }"
               />
             </div>
-            <template v-if="hintsList">
+            <div class="text-red-700 font-bold" v-if="validationError">
+              {{ validationError }}
+            </div>
+            <template v-if="hintsList.length > 0">
               <div class="flex">
                 <div
                   class="border-2 w-1/4 rounded-lg m-1 text-center p-1.5 cursor-pointer bg-gray-700 text-white"
                   v-for="(hint, i) in hintsList"
                   :key="i"
+                  @click="hintsUsingHandler(hint)"
                 >
                   {{ hint }}
                 </div>
@@ -154,7 +162,8 @@ export default {
       sel: null,
       graph: [],
       kindOfTickers: [],
-      hintsList: []
+      hintsList: [],
+      validationError: ""
     };
   },
   async created() {
@@ -173,27 +182,37 @@ export default {
   },
   methods: {
     add() {
-      const currentTicker = {
-        name: this.ticker.toUpperCase(),
-        price: "-"
-      };
+      if (
+        this.tickers.filter(
+          (t) => t.name.toUpperCase() === this.ticker.toUpperCase()
+        ).length > 0
+      ) {
+        this.validationError = "This coin is already in exist";
+      } else {
+        const currentTicker = {
+          name: this.ticker
+            .replace(/[^ \w]/g, "")
+            .toUpperCase()
+            .trim(),
+          price: "-"
+        };
+        this.tickers.push(currentTicker);
+        this.hintsList = [];
+        this.ticker = "";
+        setInterval(async () => {
+          const f = await fetch(
+            `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e`
+          );
+          const data = await f.json();
 
-      this.tickers.push(currentTicker);
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e`
-        );
-        const data = await f.json();
+          this.tickers.find((t) => t.name === currentTicker.name).price =
+            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-        // currentTicker.price =  data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-        this.tickers.find((t) => t.name === currentTicker.name).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-        if (this.sel?.name === currentTicker.name) {
-          this.graph.push(data.USD);
-        }
-      }, 5000);
-      this.ticker = "";
+          if (this.sel?.name === currentTicker.name) {
+            this.graph.push(data.USD);
+          }
+        }, 5000);
+      }
     },
 
     select(ticker) {
@@ -212,8 +231,14 @@ export default {
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
     },
-    hintsGenerator() {
-      if (/^[a-zA-Z0-9_.-]*$/.test(this.ticker)) {
+    hintsGenerator(e) {
+      if (this.ticker === "") {
+        this.hintsList = [];
+      }
+      if (e.code !== "Enter") {
+        this.validationError = "";
+      }
+      if (/^[a-zA-Z0-9_.-]*$/.test(this.ticker) && this.ticker) {
         const hintsArr = this.kindOfTickers.filter(
           (t) => t.indexOf(this.ticker.toUpperCase()) !== -1
         );
@@ -221,6 +246,12 @@ export default {
           .splice(0, 4)
           .map((t) => t.match(/\((.*?)\)/)[1]);
       }
+    },
+    hintsUsingHandler(hint) {
+      this.ticker = hint;
+      this.add();
+      this.ticker = "";
+      this.hintsList = [];
     }
   }
 };
