@@ -2,7 +2,8 @@
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div class="container">
       <div class="w-full my-4"></div>
-      <section>
+      <div v-if="loadingStatus === 'loading'">Processing...</div>
+      <section v-if="loadingStatus === 'success'">
         <div class="flex">
           <div class="max-w-xs">
             <label for="wallet" class="block text-sm font-medium text-gray-700">
@@ -157,6 +158,7 @@ export default {
 
   data() {
     return {
+      loadingStatus: "idle",
       ticker: "",
       tickers: [],
       sel: null,
@@ -167,20 +169,46 @@ export default {
     };
   },
   async created() {
-    const res = await fetch(
-      "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
-    );
-    const { Data } = await res.json();
-    let correctTickersFullNameList = [];
-    for (let t in Data) {
-      // eslint-disable-next-line no-prototype-builtins
-      if (Data.hasOwnProperty(t)) {
-        correctTickersFullNameList.push(Data[t].FullName);
-      }
+    const oldTickers = localStorage.getItem("tickers");
+    if (oldTickers) {
+      this.tickers = JSON.parse(oldTickers);
+      this.tickers.map((t) => this.subscribeToUpdate(t.name));
     }
-    this.kindOfTickers = correctTickersFullNameList;
+    this.loadingStatus = "loading";
+    try {
+      const res = await fetch(
+        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
+      );
+      const { Data } = await res.json();
+      let correctTickersFullNameList = [];
+      for (let t in Data) {
+        // eslint-disable-next-line no-prototype-builtins
+        if (Data.hasOwnProperty(t)) {
+          correctTickersFullNameList.push(Data[t].FullName);
+        }
+      }
+      this.kindOfTickers = correctTickersFullNameList;
+      this.loadingStatus = "success";
+    } catch (e) {
+      this.loadingStatus = "error";
+    }
   },
   methods: {
+    subscribeToUpdate(tickerName) {
+      setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e`
+        );
+        const data = await f.json();
+
+        this.tickers.find((t) => t.name === tickerName).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+
+        if (this.sel?.name === tickerName) {
+          this.graph.push(data.USD);
+        }
+      }, 5000);
+    },
     add() {
       if (
         this.tickers.filter(
@@ -197,21 +225,10 @@ export default {
           price: "-"
         };
         this.tickers.push(currentTicker);
+        localStorage.setItem("tickers", JSON.stringify(this.tickers));
         this.hintsList = [];
         this.ticker = "";
-        setInterval(async () => {
-          const f = await fetch(
-            `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e`
-          );
-          const data = await f.json();
-
-          this.tickers.find((t) => t.name === currentTicker.name).price =
-            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-          if (this.sel?.name === currentTicker.name) {
-            this.graph.push(data.USD);
-          }
-        }, 5000);
+        this.subscribeToUpdate(currentTicker.name);
       }
     },
 
@@ -222,6 +239,7 @@ export default {
 
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
+      localStorage.setItem("tickers", JSON.stringify(this.tickers));
     },
 
     normalizeGraph() {
