@@ -60,13 +60,14 @@
               d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
             ></path>
           </svg>
-          Добавить
+          Add
         </button>
         <div>
           <div>
-            Фильтр
+            Filter
             <input
               v-model="filter"
+              @input="page = 1"
               class="mt-1 block w-1/4 px-3 py-2 bg-white border border-slate-300 rounded-md text-sm shadow-sm placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
               type="text"
             />
@@ -80,7 +81,7 @@
               back
             </button>
             <button
-              v-if="filteredTickers().length === 6"
+              v-if="hasNextPage"
               @click="pageChangeBtn('increment')"
               class="my-4 ml-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
             >
@@ -93,11 +94,11 @@
         <hr class="w-full border-t border-gray-600 my-4" />
         <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
           <div
-            v-for="t in filteredTickers()"
+            v-for="t in paginatedTickers"
             :key="t.name"
             @click="select(t)"
             :class="{
-              'border-4': sel === t
+              'border-4': selectedTicker === t
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -133,20 +134,20 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section v-if="sel" class="relative">
+      <section v-if="selectedTicker" class="relative">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          {{ sel.name }} - USD
+          {{ selectedTicker.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
           <div
-            v-for="(bar, idx) in normalizeGraph()"
+            v-for="(bar, idx) in normalizedGraph"
             :key="idx"
             :style="{ height: `${bar}%` }"
             class="bg-purple-800 border w-10"
           ></div>
         </div>
         <button
-          @click="sel = null"
+          @click="selectedTicker = null"
           type="button"
           class="absolute top-0 right-0"
         >
@@ -178,20 +179,35 @@
 </template>
 
 <script>
+// [x] 1. Наличие в состоянии ЗАВИСИМЫХ ДАННЫХ | Критичность: 5+
+// [ ] 2. Запросы напрямую внутри компонента (???) | Критичность: 5
+// [ ] 3. При удалении остается подписка на загрузку тикера | Критичность: 5
+// [ ] 4. Обработка ошибок API | Критичность: 5
+// [ ] 5. Количество запросов | Критичность: 4
+// [x] 6. При удалении тикера не изменяется localStorage | Критичность: 4
+// [x] 7. Одинаковый код в watch | Критичность: 3
+// [ ] 8. localStorage и анонимные вкладки | Критичность: 3
+// [ ] 9. График ужасно выглядит если будет много цен | Критичность: 2
+// [ ] 10. Магические строки и числа (URL, 5000 миллисекунд задержки, ключ локал стораджа, количество на странице) |  Критичность: 1
+
+// Параллельно
+// [x] График сломан если везде одинаковые значения
+// [x] При удалении тикера остается выбор
+
 export default {
   name: "App",
 
   data() {
     return {
-      loadingStatus: "idle",
       ticker: "",
+      filter: "",
+      loadingStatus: "idle",
       tickers: [],
-      sel: null,
+      selectedTicker: null,
       graph: [],
       kindOfTickers: [],
       hintsList: [],
       validationError: "",
-      filter: "",
       page: 1
     };
   },
@@ -203,9 +219,8 @@ export default {
       this.filter = windowData.filter;
     }
     if (windowData.page) {
-      this.page = windowData.page;
+      this.page = Number(windowData.page);
     }
-    console.log(windowData);
     const oldTickers = localStorage.getItem("tickers");
     if (oldTickers) {
       this.tickers = JSON.parse(oldTickers);
@@ -231,20 +246,61 @@ export default {
     }
   },
   watch: {
+    selectedTicker() {
+      this.graph = [];
+    },
     filter() {
       this.page = 1;
+    },
+    paginatedTickers() {
+      if (this.paginatedTickers.length === 0 && this.page === 0) {
+        this.page -= 1;
+      }
+    },
+    tickers() {
+      localStorage.setItem("tickers", JSON.stringify(this.tickers));
+    },
+    pageStateOptions(value) {
       window.history.pushState(
         null,
         document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+        `${window.location.pathname}?filter=${value.filter}&page=${value.page}`
+      );
+    }
+  },
+  computed: {
+    startIndex() {
+      return (this.page - 1) * 6;
+    },
+    endIndex() {
+      return this.page * 6;
+    },
+    hasNextPage() {
+      return this.filteredTickers.length > this.endIndex;
+    },
+    filteredTickers() {
+      return this.tickers.filter((t) =>
+        t.name.includes(this.filter.toUpperCase())
       );
     },
-    page() {
-      window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+    paginatedTickers() {
+      return this.filteredTickers.slice(this.startIndex, this.endIndex);
+    },
+    normalizedGraph() {
+      const maxValue = Math.max(...this.graph);
+      const minValue = Math.min(...this.graph);
+      if (minValue === maxValue) {
+        return this.graph.map(() => 50);
+      }
+      return this.graph.map(
+        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
+    },
+    pageStateOptions() {
+      return {
+        page: this.page,
+        filter: this.filter
+      };
     }
   },
   methods: {
@@ -258,7 +314,7 @@ export default {
         this.tickers.find((t) => t.name === tickerName).price =
           data.USD > 1 ? data.USD?.toFixed(2) : data.USD?.toPrecision(2);
 
-        if (this.sel?.name === tickerName) {
+        if (this.selectedTicker?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 5000);
@@ -278,8 +334,8 @@ export default {
             .trim(),
           price: "-"
         };
-        this.tickers.push(currentTicker);
-        localStorage.setItem("tickers", JSON.stringify(this.tickers));
+        this.tickers = [...this.tickers, currentTicker];
+
         this.hintsList = [];
         this.ticker = "";
         this.filter = "";
@@ -288,21 +344,18 @@ export default {
     },
 
     select(ticker) {
-      this.sel = ticker;
-      this.graph = [];
+      this.selectedTicker = ticker;
     },
 
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
       localStorage.setItem("tickers", JSON.stringify(this.tickers));
-    },
-
-    normalizeGraph() {
-      const maxValue = Math.max(...this.graph);
-      const minValue = Math.min(...this.graph);
-      return this.graph.map(
-        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-      );
+      if (this.paginatedTickers && this.page > 1) {
+        this.page -= 1;
+      }
+      if (this.selectedTicker === tickerToRemove) {
+        this.selectedTicker = null;
+      }
     },
     hintsGenerator(e) {
       if (this.ticker === "") {
@@ -326,23 +379,14 @@ export default {
       this.ticker = "";
       this.hintsList = [];
     },
-    filteredTickers() {
-      const start = (this.page - 1) * 7;
-      const end = this.page * 7 - 1;
-      return this.tickers
-        .filter((t) => t.name.includes(this.filter.toUpperCase()))
-        .slice(start, end);
-    },
     pageChangeBtn(method) {
       switch (method) {
         case "increment":
-          if (this.filteredTickers().length === 6) {
-            this.page = this.page + 1;
-          }
+          this.page += 1;
           break;
         case "decrement":
           if (this.page > 1) {
-            this.page = this.page - 1;
+            this.page -= 1;
           }
           break;
         default:
