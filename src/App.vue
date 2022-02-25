@@ -107,7 +107,7 @@
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -194,6 +194,8 @@
 // [x] График сломан если везде одинаковые значения
 // [x] При удалении тикера остается выбор
 
+import { tickersAPI } from "@/api";
+
 export default {
   name: "App",
 
@@ -215,23 +217,22 @@ export default {
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
-    if (windowData.filter) {
-      this.filter = windowData.filter;
-    }
-    if (windowData.page) {
-      this.page = Number(windowData.page);
-    }
+
+    const VALID_KEYS = ["filter", "page"];
+
+    VALID_KEYS.forEach((key) => {
+      if (windowData[key]) {
+        this[key] = windowData[key];
+      }
+    });
     const oldTickers = localStorage.getItem("tickers");
     if (oldTickers) {
       this.tickers = JSON.parse(oldTickers);
-      this.tickers.map((t) => this.subscribeToUpdate(t.name));
     }
     this.loadingStatus = "loading";
     try {
-      const res = await fetch(
-        "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
-      );
-      const { Data } = await res.json();
+      const coinList = await tickersAPI.getWholeCoinList();
+      const { Data } = await coinList;
       let correctTickersFullNameList = [];
       for (let t in Data) {
         // eslint-disable-next-line no-prototype-builtins
@@ -244,6 +245,7 @@ export default {
     } catch (e) {
       this.loadingStatus = "error";
     }
+    await setInterval(this.updateTickers, 5000);
   },
   watch: {
     selectedTicker() {
@@ -253,7 +255,7 @@ export default {
       this.page = 1;
     },
     paginatedTickers() {
-      if (this.paginatedTickers.length === 0 && this.page === 0) {
+      if (this.paginatedTickers.length === 0 && this.page !== 1) {
         this.page -= 1;
       }
     },
@@ -304,20 +306,26 @@ export default {
     }
   },
   methods: {
-    subscribeToUpdate(tickerName) {
-      setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e`
-        );
-        const data = await f.json();
-
-        this.tickers.find((t) => t.name === tickerName).price =
-          data.USD > 1 ? data.USD?.toFixed(2) : data.USD?.toPrecision(2);
-
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(data.USD);
+    formatPrice(price) {
+      if (price === "-") {
+        return price;
+      }
+      return price > 1 ? price?.toFixed(2) : price?.toPrecision(2);
+    },
+    async updateTickers() {
+      if (!this.tickers.length) {
+        return;
+      }
+      const exchangeData = await tickersAPI.getTickersInformation(
+        this.tickers.map((t) => t.name)
+      );
+      this.tickers.forEach((t) => {
+        const price = exchangeData[t.name.toUpperCase()];
+        if (!price) {
+          t.price = "-";
         }
-      }, 5000);
+        t.price = price;
+      });
     },
     add() {
       if (
@@ -339,7 +347,6 @@ export default {
         this.hintsList = [];
         this.ticker = "";
         this.filter = "";
-        this.subscribeToUpdate(currentTicker.name);
       }
     },
 
@@ -350,9 +357,6 @@ export default {
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
       localStorage.setItem("tickers", JSON.stringify(this.tickers));
-      if (this.paginatedTickers && this.page > 1) {
-        this.page -= 1;
-      }
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
