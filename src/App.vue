@@ -194,7 +194,7 @@
 // [x] График сломан если везде одинаковые значения
 // [x] При удалении тикера остается выбор
 
-import { subscribeToTicker, tickersAPI } from "@/api";
+import { subscribeToTicker, tickersAPI, unsubscribeFromTicker } from "@/api";
 
 export default {
   name: "App",
@@ -229,7 +229,7 @@ export default {
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach((ticker) => {
-        subscribeToTicker(ticker.name, () => {});
+        subscribeToTicker(ticker.name, this.updateTicker);
       });
     }
     this.loadingStatus = "loading";
@@ -248,7 +248,7 @@ export default {
     } catch (e) {
       this.loadingStatus = "error";
     }
-    await setInterval(this.updateTickers, 5000);
+    await setInterval(tickersAPI.getTickersInformation, 5000);
   },
   watch: {
     selectedTicker() {
@@ -309,24 +309,16 @@ export default {
     }
   },
   methods: {
+    updateTicker(tickerName, newPrice) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => (t.price = newPrice));
+    },
     formatPrice(price) {
       if (price === "-") {
         return price;
       }
       return price > 1 ? price?.toFixed(2) : price?.toPrecision(2);
-    },
-    async updateTickers() {
-      if (!this.tickers.length) {
-        return;
-      }
-      const exchangeData = await tickersAPI.getTickersInformation(
-        this.tickers.map((t) => t.name)
-      );
-      this.tickers.forEach((t) => {
-        const price = exchangeData[t.name.toUpperCase()];
-
-        t.price = price ?? "-";
-      });
     },
     add() {
       if (
@@ -344,7 +336,7 @@ export default {
           price: "-"
         };
         this.tickers = [...this.tickers, currentTicker];
-        subscribeToTicker(currentTicker.name, () => {});
+        subscribeToTicker(currentTicker.name, this.updateTicker);
         this.hintsList = [];
         this.ticker = "";
         this.filter = "";
@@ -358,6 +350,7 @@ export default {
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
       localStorage.setItem("tickers", JSON.stringify(this.tickers));
+      unsubscribeFromTicker(tickerToRemove.name);
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }

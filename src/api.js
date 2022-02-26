@@ -1,7 +1,7 @@
 const API_KEY =
   "ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e";
 
-const tickers = new Map(); //
+const tickersHandlers = new Map(); //
 
 export const tickersAPI = {
   getWholeCoinList: async () => {
@@ -10,38 +10,33 @@ export const tickersAPI = {
     );
     return await res.json();
   },
-  getTickersInformation: async (tickers) => {
-    if (tickers.size === 0) {
+  getTickersInformation: async () => {
+    if (tickersHandlers.size === 0) {
       return;
     }
-    console.log(tickers.keys());
     const res = await fetch(
       `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${[
-        ...tickers.keys()
+        ...tickersHandlers.keys()
       ].join(",")}&tsyms=USD&api_key=${API_KEY}`
     );
     const rawData = await res.json();
-    console.log(rawData);
-    // const normalizedData = Object.fromEntries(
-    //   Object.entries(rawData).map(([key, value]) => [key, value.USD])
-    // );
-
-    // return normalizedData;
+    const updatedPrices = Object.fromEntries(
+      Object.entries(rawData).map(([key, value]) => [key, value.USD])
+    );
+    Object.entries(updatedPrices).forEach(([name, newPrice]) => {
+      const handlers = tickersHandlers.get(name);
+      handlers.forEach((fn) => fn(name, newPrice));
+    });
   }
 };
 
 export const subscribeToTicker = (ticker, cb) => {
-  const subscribers = tickers.get(ticker) || [];
-  tickers.set(ticker, [...subscribers, cb]);
-  console.log(tickers);
+  const subscribers = tickersHandlers.get(ticker) || [];
+  tickersHandlers.set(ticker, [...subscribers, cb]);
 };
 
-export const unsubscribeFromTicker = (ticker, cb) => {
-  const subscribers = ticker.get(ticker) || [];
-  tickers.set(
-    ticker,
-    subscribers.filter((fn) => fn !== cb)
-  );
+export const unsubscribeFromTicker = (tickerName) => {
+  tickersHandlers.delete(tickerName);
 };
 
-window.ticker = tickers;
+window.ticker = tickersHandlers;
