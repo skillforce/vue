@@ -1,7 +1,28 @@
 const API_KEY =
-  "ce3fd966e7a1d10d65f907b20bf000552158fd3ed1bd614110baa0ac6cb57a7e";
+  "16dcff85d37ccb3f100772438e5afd5c19d8295240290b1a4c7508fccef06c69";
 
-const tickersHandlers = new Map(); //
+const tickersHandlers = new Map();
+
+const socket = new WebSocket(
+  `wss://streamer.cryptocompare.com/v2?api_key=${API_KEY}`
+);
+const AGGREGATE_INDEX = "5";
+
+socket.addEventListener("message", (e) => {
+  const {
+    TYPE: type,
+    FROMSYMBOL: currency,
+    PRICE: newPrice
+  } = JSON.parse(e.data);
+  if (type !== AGGREGATE_INDEX) {
+    return;
+  }
+
+  const handlers = tickersHandlers.get(currency) || [];
+  if (newPrice) {
+    handlers.forEach((fn) => fn(currency, newPrice));
+  }
+});
 
 export const tickersAPI = {
   getWholeCoinList: async () => {
@@ -9,34 +30,47 @@ export const tickersAPI = {
       "https://min-api.cryptocompare.com/data/all/coinlist?summary=true"
     );
     return await res.json();
-  },
-  getTickersInformation: async () => {
-    if (tickersHandlers.size === 0) {
-      return;
-    }
-    const res = await fetch(
-      `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${[
-        ...tickersHandlers.keys()
-      ].join(",")}&tsyms=USD&api_key=${API_KEY}`
-    );
-    const rawData = await res.json();
-    const updatedPrices = Object.fromEntries(
-      Object.entries(rawData).map(([key, value]) => [key, value.USD])
-    );
-    Object.entries(updatedPrices).forEach(([name, newPrice]) => {
-      const handlers = tickersHandlers.get(name);
-      handlers.forEach((fn) => fn(name, newPrice));
-    });
   }
 };
 
-export const subscribeToTicker = (ticker, cb) => {
-  const subscribers = tickersHandlers.get(ticker) || [];
-  tickersHandlers.set(ticker, [...subscribers, cb]);
+const sendMessageToWS = (message) => {
+  const stringifyMessage = JSON.stringify(message);
+  if (socket.readyState === socket.OPEN) {
+    socket.send(stringifyMessage);
+    return;
+  }
+  socket.addEventListener(
+    "open",
+    () => {
+      socket.send(stringifyMessage);
+    },
+    { once: true }
+  );
+};
+
+const subscribeOnWS = (tickerName) => {
+  return {
+    action: "SubAdd",
+    subs: [`5~CCCAGG~${tickerName}~USD`]
+  };
+};
+
+const unSubscribeOnWS = (tickerName) => {
+  return {
+    action: "SubRemove",
+    subs: [`5~CCCAGG~${tickerName}~USD`]
+  };
+};
+
+export const subscribeToTicker = (tickerName, cb) => {
+  const subscribers = tickersHandlers.get(tickerName) || [];
+  tickersHandlers.set(tickerName, [...subscribers, cb]);
+  sendMessageToWS(subscribeOnWS(tickerName));
 };
 
 export const unsubscribeFromTicker = (tickerName) => {
   tickersHandlers.delete(tickerName);
+  sendMessageToWS(unSubscribeOnWS(tickerName));
 };
 
 window.ticker = tickersHandlers;
