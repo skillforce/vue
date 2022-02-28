@@ -8,6 +8,8 @@ const socket = new WebSocket(
 );
 const AGGREGATE_INDEX = "5";
 
+export const bc = new BroadcastChannel("demo");
+
 socket.addEventListener("message", (e) => {
   const {
     TYPE: type,
@@ -22,6 +24,7 @@ socket.addEventListener("message", (e) => {
   if (newPrice) {
     handlers.forEach((fn) => fn(currency, newPrice));
   }
+  bc.postMessage({ currency, newPrice });
 });
 
 export const tickersAPI = {

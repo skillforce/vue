@@ -194,7 +194,12 @@
 // [x] График сломан если везде одинаковые значения
 // [x] При удалении тикера остается выбор
 
-import { subscribeToTicker, tickersAPI, unsubscribeFromTicker } from "@/api";
+import {
+  bc,
+  subscribeToTicker,
+  tickersAPI,
+  unsubscribeFromTicker
+} from "@/api";
 
 export default {
   name: "App",
@@ -264,6 +269,14 @@ export default {
     },
     tickers() {
       localStorage.setItem("tickers", JSON.stringify(this.tickers));
+      bc.addEventListener("message", (e) => {
+        const newCurrencyPrice = e.data;
+        this.tickers = this.tickers.map((t) =>
+          t.name === newCurrencyPrice.currency
+            ? { ...t, price: newCurrencyPrice.newPrice }
+            : { ...t }
+        );
+      });
     },
     pageStateOptions(value) {
       window.history.pushState(
@@ -312,7 +325,12 @@ export default {
     updateTicker(tickerName, newPrice) {
       this.tickers
         .filter((t) => t.name === tickerName)
-        .forEach((t) => (t.price = newPrice));
+        .forEach((t) => {
+          t.price = newPrice;
+          if (t === this.selectedTicker) {
+            this.graph.push(t.price);
+          }
+        });
     },
     formatPrice(price) {
       if (price === "-") {
