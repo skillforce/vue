@@ -194,12 +194,7 @@
 // [x] График сломан если везде одинаковые значения
 // [x] При удалении тикера остается выбор
 
-import {
-  bc,
-  subscribeToTicker,
-  tickersAPI,
-  unsubscribeFromTicker
-} from "@/api";
+import { subscribeToTicker, tickersAPI, unsubscribeFromTicker } from "@/api";
 
 export default {
   name: "App",
@@ -253,7 +248,6 @@ export default {
     } catch (e) {
       this.loadingStatus = "error";
     }
-    await setInterval(tickersAPI.getTickersInformation, 5000);
   },
   watch: {
     selectedTicker() {
@@ -269,14 +263,6 @@ export default {
     },
     tickers() {
       localStorage.setItem("tickers", JSON.stringify(this.tickers));
-      bc.addEventListener("message", (e) => {
-        const newCurrencyPrice = e.data;
-        this.tickers = this.tickers.map((t) =>
-          t.name === newCurrencyPrice.currency
-            ? { ...t, price: newCurrencyPrice.newPrice }
-            : { ...t }
-        );
-      });
     },
     pageStateOptions(value) {
       window.history.pushState(

@@ -7,25 +7,53 @@ const socket = new WebSocket(
   `wss://streamer.cryptocompare.com/v2?api_key=${API_KEY}`
 );
 const AGGREGATE_INDEX = "5";
+const BAD_INDEX = "500";
+let BTC_PRICE;
 
-export const bc = new BroadcastChannel("demo");
+socket.addEventListener(
+  "message",
+  () => {
+    if (!tickersHandlers.get("BTC")) sendMessageToWS(subscribeOnWS("BTC"));
+  },
+  { once: true }
+);
 
 socket.addEventListener("message", (e) => {
   const {
     TYPE: type,
     FROMSYMBOL: currency,
-    PRICE: newPrice
+    PRICE: newPrice,
+    TOSYMBOL: toSymbol,
+    LASTVOLUMETO: lastVolumeToBTC
   } = JSON.parse(e.data);
-  if (type !== AGGREGATE_INDEX) {
-    return;
+
+  if (toSymbol === "BTC") {
+    console.log(lastVolumeToBTC);
+  }
+  if (currency === "BTC" && newPrice) {
+    BTC_PRICE = newPrice;
+    console.log(BTC_PRICE);
+  }
+  const handlers = tickersHandlers.get(currency) || [];
+
+  if (type === BAD_INDEX) {
+    const { PARAMETER: param } = JSON.parse(e.data);
+    sendMessageToWS(currencyCheckOnWs(param));
   }
 
-  const handlers = tickersHandlers.get(currency) || [];
-  if (newPrice) {
-    handlers.forEach((fn) => fn(currency, newPrice));
+  if (type === AGGREGATE_INDEX) {
+    if (newPrice) {
+      handlers.forEach((fn) => fn(currency, newPrice));
+    }
   }
-  bc.postMessage({ currency, newPrice });
 });
+
+const changeParams = (param) => {
+  const arrParam = param.split("");
+  const newParam = arrParam.splice(0, arrParam.length - 3);
+  newParam.push("B", "T", "C");
+  return newParam.join("");
+};
 
 export const tickersAPI = {
   getWholeCoinList: async () => {
@@ -62,6 +90,13 @@ const unSubscribeOnWS = (tickerName) => {
   return {
     action: "SubRemove",
     subs: [`5~CCCAGG~${tickerName}~USD`]
+  };
+};
+
+const currencyCheckOnWs = (param) => {
+  return {
+    action: "SubAdd",
+    subs: [changeParams(param)]
   };
 };
 
