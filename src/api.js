@@ -2,6 +2,7 @@ const API_KEY =
   "16dcff85d37ccb3f100772438e5afd5c19d8295240290b1a4c7508fccef06c69";
 
 const tickersHandlers = new Map();
+const toBTCPrice = {};
 
 const socket = new WebSocket(
   `wss://streamer.cryptocompare.com/v2?api_key=${API_KEY}`
@@ -28,11 +29,20 @@ socket.addEventListener("message", (e) => {
   } = JSON.parse(e.data);
 
   if (toSymbol === "BTC") {
-    console.log(lastVolumeToBTC);
+    toBTCPrice[currency] = lastVolumeToBTC;
+    const handler = tickersHandlers.get(currency);
+    const convertIndex = toBTCPrice[currency];
+    return handler.forEach((fn) => fn(currency, BTC_PRICE * convertIndex));
   }
+
   if (currency === "BTC" && newPrice) {
     BTC_PRICE = newPrice;
-    console.log(BTC_PRICE);
+    for (let keys in toBTCPrice) {
+      if (tickersHandlers.has(keys)) {
+        const updateValue = tickersHandlers.get(keys)[0];
+        updateValue(keys, toBTCPrice[keys] * BTC_PRICE);
+      }
+    }
   }
   const handlers = tickersHandlers.get(currency) || [];
 
