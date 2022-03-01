@@ -248,6 +248,7 @@ export default {
     } catch (e) {
       this.loadingStatus = "error";
     }
+    console.log(this.tickers);
   },
   watch: {
     selectedTicker() {

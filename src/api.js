@@ -9,12 +9,13 @@ const socket = new WebSocket(
 );
 const AGGREGATE_INDEX = "5";
 const BAD_INDEX = "500";
+// const EMPTY_TICKERS = [];
 let BTC_PRICE;
 
 socket.addEventListener(
   "message",
   () => {
-    if (!tickersHandlers.get("BTC")) sendMessageToWS(subscribeOnWS("BTC"));
+    sendMessageToWS(subscribeOnWS("BTC"));
   },
   { once: true }
 );
@@ -48,7 +49,14 @@ socket.addEventListener("message", (e) => {
 
   if (type === BAD_INDEX) {
     const { PARAMETER: param } = JSON.parse(e.data);
-    sendMessageToWS(currencyCheckOnWs(param));
+    const [, , fromTicker, toTicker] = param.split("~");
+    if (toTicker === "BTC") {
+      unsubscribeFromTicker(fromTicker);
+      sendMessageToWS(unSubscribeOnWS(fromTicker, toTicker));
+    } else {
+      // const isToBTC = arrParams[] ;
+      sendMessageToWS(currencyCheckOnWs(param));
+    }
   }
 
   if (type === AGGREGATE_INDEX) {
@@ -59,10 +67,10 @@ socket.addEventListener("message", (e) => {
 });
 
 const changeParams = (param) => {
-  const arrParam = param.split("");
-  const newParam = arrParam.splice(0, arrParam.length - 3);
-  newParam.push("B", "T", "C");
-  return newParam.join("");
+  const arrParam = param.split("~");
+  const newParam = arrParam.splice(0, arrParam.length - 1);
+  newParam.push("BTC");
+  return newParam.join("~");
 };
 
 export const tickersAPI = {
@@ -96,10 +104,10 @@ const subscribeOnWS = (tickerName) => {
   };
 };
 
-const unSubscribeOnWS = (tickerName) => {
+const unSubscribeOnWS = (tickerName, fromTickerName = "USD") => {
   return {
     action: "SubRemove",
-    subs: [`5~CCCAGG~${tickerName}~USD`]
+    subs: [`5~CCCAGG~${tickerName}~${fromTickerName}`]
   };
 };
 
@@ -113,7 +121,9 @@ const currencyCheckOnWs = (param) => {
 export const subscribeToTicker = (tickerName, cb) => {
   const subscribers = tickersHandlers.get(tickerName) || [];
   tickersHandlers.set(tickerName, [...subscribers, cb]);
-  sendMessageToWS(subscribeOnWS(tickerName));
+  if (tickerName !== "BTC") {
+    sendMessageToWS(subscribeOnWS(tickerName));
+  }
 };
 
 export const unsubscribeFromTicker = (tickerName) => {
