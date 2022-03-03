@@ -9,8 +9,8 @@ const socket = new WebSocket(
 );
 const AGGREGATE_INDEX = "5";
 const BAD_INDEX = "500";
-// const EMPTY_TICKERS = [];
 let BTC_PRICE;
+export const BAD_TICKERS = [];
 
 socket.addEventListener(
   "message",
@@ -45,21 +45,23 @@ socket.addEventListener("message", (e) => {
       }
     }
   }
-  const handlers = tickersHandlers.get(currency) || [];
 
   if (type === BAD_INDEX) {
     const { PARAMETER: param } = JSON.parse(e.data);
     const [, , fromTicker, toTicker] = param.split("~");
-    if (toTicker === "BTC") {
-      unsubscribeFromTicker(fromTicker);
-      sendMessageToWS(unSubscribeOnWS(fromTicker, toTicker));
-    } else {
-      // const isToBTC = arrParams[] ;
-      sendMessageToWS(currencyCheckOnWs(param));
+    if (BAD_TICKERS.indexOf(fromTicker) === -1) {
+      if (toTicker === "BTC") {
+        unsubscribeFromTicker(fromTicker);
+        sendMessageToWS(unSubscribeOnWS(fromTicker, toTicker));
+        BAD_TICKERS.push(fromTicker);
+      } else {
+        sendMessageToWS(currencyCheckOnWs(param));
+      }
     }
   }
 
   if (type === AGGREGATE_INDEX) {
+    const handlers = tickersHandlers.get(currency) || [];
     if (newPrice) {
       handlers.forEach((fn) => fn(currency, newPrice));
     }
@@ -119,10 +121,14 @@ const currencyCheckOnWs = (param) => {
 };
 
 export const subscribeToTicker = (tickerName, cb) => {
-  const subscribers = tickersHandlers.get(tickerName) || [];
-  tickersHandlers.set(tickerName, [...subscribers, cb]);
-  if (tickerName !== "BTC") {
-    sendMessageToWS(subscribeOnWS(tickerName));
+  if (BAD_TICKERS.indexOf(tickerName) === -1) {
+    const subscribers = tickersHandlers.get(tickerName) || [];
+    tickersHandlers.set(tickerName, [...subscribers, cb]);
+    if (tickerName !== "BTC") {
+      sendMessageToWS(subscribeOnWS(tickerName));
+    }
+  } else {
+    return;
   }
 };
 

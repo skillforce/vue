@@ -98,7 +98,8 @@
             :key="t.name"
             @click="select(t)"
             :class="{
-              'border-4': selectedTicker === t
+              'border-4': selectedTicker === t,
+              'bg-red-400': this.badTickers.indexOf(t.name) !== -1
             }"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
           >
@@ -194,7 +195,12 @@
 // [x] График сломан если везде одинаковые значения
 // [x] При удалении тикера остается выбор
 
-import { subscribeToTicker, tickersAPI, unsubscribeFromTicker } from "@/api";
+import {
+  subscribeToTicker,
+  tickersAPI,
+  unsubscribeFromTicker,
+  BAD_TICKERS
+} from "@/api";
 
 export default {
   name: "App",
@@ -205,6 +211,7 @@ export default {
       filter: "",
       loadingStatus: "idle",
       tickers: [],
+      badTickers: BAD_TICKERS,
       selectedTicker: null,
       graph: [],
       kindOfTickers: [],
@@ -214,6 +221,7 @@ export default {
     };
   },
   async created() {
+    this.startSharedWorker();
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
@@ -248,7 +256,6 @@ export default {
     } catch (e) {
       this.loadingStatus = "error";
     }
-    console.log(this.tickers);
   },
   watch: {
     selectedTicker() {
