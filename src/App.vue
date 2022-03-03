@@ -139,7 +139,10 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selectedTicker.name }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div
+          class="flex items-end border-gray-600 border-b border-l h-64"
+          ref="graph"
+        >
           <div
             v-for="(bar, idx) in normalizedGraph"
             :key="idx"
@@ -213,7 +216,10 @@ export default {
       tickers: [],
       badTickers: BAD_TICKERS,
       selectedTicker: null,
+
       graph: [],
+      maxGraphElements: 1,
+
       kindOfTickers: [],
       hintsList: [],
       validationError: "",
@@ -221,11 +227,9 @@ export default {
     };
   },
   async created() {
-    this.startSharedWorker();
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
-
     const VALID_KEYS = ["filter", "page"];
 
     VALID_KEYS.forEach((key) => {
@@ -256,6 +260,12 @@ export default {
     } catch (e) {
       this.loadingStatus = "error";
     }
+  },
+  mounted() {
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
   },
   watch: {
     selectedTicker() {
@@ -316,13 +326,24 @@ export default {
     }
   },
   methods: {
+    calculateMaxGraphElements() {
+      if (this.$refs.graph.clientWidth) {
+        this.maxGraphElements = this.$refs.graph.clientWidth / 38;
+      }
+    },
     updateTicker(tickerName, newPrice) {
       this.tickers
         .filter((t) => t.name === tickerName)
         .forEach((t) => {
           t.price = newPrice;
           if (t === this.selectedTicker) {
+            this.calculateMaxGraphElements();
             this.graph.push(t.price);
+            if (this.graph.length > this.maxGraphElements) {
+              this.graph = this.graph.slice(
+                this.graph.length - this.maxGraphElements
+              );
+            }
           }
         });
     },
