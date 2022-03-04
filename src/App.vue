@@ -146,8 +146,8 @@
           <div
             v-for="(bar, idx) in normalizedGraph"
             :key="idx"
-            :style="{ height: `${bar}%` }"
-            class="bg-purple-800 border w-10"
+            :style="{ height: `${bar}%`, width: `${this.graphElementWidth}px` }"
+            class="bg-purple-800 border"
           ></div>
         </div>
         <button
@@ -219,6 +219,7 @@ export default {
 
       graph: [],
       maxGraphElements: 1,
+      graphElementWidth: 38,
 
       kindOfTickers: [],
       hintsList: [],
@@ -270,6 +271,7 @@ export default {
   watch: {
     selectedTicker() {
       this.graph = [];
+      this.$nextTick().then(this.calculateMaxGraphElements);
     },
     filter() {
       this.page = 1;
@@ -328,7 +330,8 @@ export default {
   methods: {
     calculateMaxGraphElements() {
       if (this.$refs.graph.clientWidth) {
-        this.maxGraphElements = this.$refs.graph.clientWidth / 38;
+        this.maxGraphElements =
+          this.$refs.graph.clientWidth / this.graphElementWidth;
       }
     },
     updateTicker(tickerName, newPrice) {
@@ -337,8 +340,8 @@ export default {
         .forEach((t) => {
           t.price = newPrice;
           if (t === this.selectedTicker) {
-            this.calculateMaxGraphElements();
             this.graph.push(t.price);
+            debugger;
             if (this.graph.length > this.maxGraphElements) {
               this.graph = this.graph.slice(
                 this.graph.length - this.maxGraphElements
