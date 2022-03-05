@@ -2,8 +2,7 @@
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div class="container">
       <div class="w-full my-4"></div>
-      <div v-if="loadingStatus === 'loading'">Processing...</div>
-      <add-ticker />
+      <add-ticker @add-ticker="add" :tickers="tickers" />
       <div>
         <div>
           Filter
@@ -76,99 +75,50 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section v-if="selectedTicker" class="relative">
-        <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          {{ selectedTicker.name }} - USD
-        </h3>
-        <div
-          class="flex items-end border-gray-600 border-b border-l h-64"
-          ref="graph"
-        >
-          <div
-            v-for="(bar, idx) in normalizedGraph"
-            :key="idx"
-            :style="{ height: `${bar}%`, width: `${this.graphElementWidth}px` }"
-            class="bg-purple-800 border"
-          ></div>
-        </div>
-        <button
-          @click="selectedTicker = null"
-          type="button"
-          class="absolute top-0 right-0"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            xmlns:xlink="http://www.w3.org/1999/xlink"
-            xmlns:svgjs="http://svgjs.com/svgjs"
-            version="1.1"
-            width="30"
-            height="30"
-            x="0"
-            y="0"
-            viewBox="0 0 511.76 511.76"
-            style="enable-background: new 0 0 512 512"
-            xml:space="preserve"
-          >
-            <g>
-              <path
-                d="M436.896,74.869c-99.84-99.819-262.208-99.819-362.048,0c-99.797,99.819-99.797,262.229,0,362.048    c49.92,49.899,115.477,74.837,181.035,74.837s131.093-24.939,181.013-74.837C536.715,337.099,536.715,174.688,436.896,74.869z     M361.461,331.317c8.341,8.341,8.341,21.824,0,30.165c-4.16,4.16-9.621,6.251-15.083,6.251c-5.461,0-10.923-2.091-15.083-6.251    l-75.413-75.435l-75.392,75.413c-4.181,4.16-9.643,6.251-15.083,6.251c-5.461,0-10.923-2.091-15.083-6.251    c-8.341-8.341-8.341-21.845,0-30.165l75.392-75.413l-75.413-75.413c-8.341-8.341-8.341-21.845,0-30.165    c8.32-8.341,21.824-8.341,30.165,0l75.413,75.413l75.413-75.413c8.341-8.341,21.824-8.341,30.165,0    c8.341,8.32,8.341,21.824,0,30.165l-75.413,75.413L361.461,331.317z"
-                fill="#718096"
-                data-original="#000000"
-              ></path>
-            </g>
-          </svg>
-        </button>
-      </section>
+      <graphic-view
+        @unSelectTicker="unSelect"
+        :selectedTicker="selectedTicker"
+      />
     </div>
   </div>
 </template>
 
 <script>
 // [x] 1. Наличие в состоянии ЗАВИСИМЫХ ДАННЫХ | Критичность: 5+
-// [ ] 2. Запросы напрямую внутри компонента (???) | Критичность: 5
-// [ ] 3. При удалении остается подписка на загрузку тикера | Критичность: 5
-// [ ] 4. Обработка ошибок API | Критичность: 5
-// [ ] 5. Количество запросов | Критичность: 4
+// [x] 2. Запросы напрямую внутри компонента (???) | Критичность: 5
+// [x] 3. При удалении остается подписка на загрузку тикера | Критичность: 5
+// [x] 4. Обработка ошибок API | Критичность: 5
+// [x] 5. Количество запросов | Критичность: 4
 // [x] 6. При удалении тикера не изменяется localStorage | Критичность: 4
 // [x] 7. Одинаковый код в watch | Критичность: 3
 // [ ] 8. localStorage и анонимные вкладки | Критичность: 3
-// [ ] 9. График ужасно выглядит если будет много цен | Критичность: 2
-// [ ] 10. Магические строки и числа (URL, 5000 миллисекунд задержки, ключ локал стораджа, количество на странице) |  Критичность: 1
+// [x] 9. График ужасно выглядит если будет много цен | Критичность: 2
+// [+-] 10. Магические строки и числа (URL, 5000 миллисекунд задержки, ключ локал стораджа, количество на странице) |  Критичность: 1
 
 // Параллельно
 // [x] График сломан если везде одинаковые значения
 // [x] При удалении тикера остается выбор
 
-import {
-  subscribeToTicker,
-  tickersAPI,
-  unsubscribeFromTicker,
-  BAD_TICKERS
-} from "@/api";
+import { subscribeToTicker, unsubscribeFromTicker, BAD_TICKERS } from "@/api";
 import AddTicker from "@/components/AddTicker.vue";
+import GraphicView from "@/components/GraphicView";
 
 export default {
   name: "App",
   components: {
-    AddTicker
+    AddTicker,
+    GraphicView
   },
 
   data() {
     return {
-      ticker: "",
       filter: "",
-      loadingStatus: "idle",
       tickers: [],
       badTickers: BAD_TICKERS,
       selectedTicker: null,
 
       graph: [],
-      maxGraphElements: 1,
-      graphElementWidth: 38,
 
-      kindOfTickers: [],
-      hintsList: [],
-      validationError: "",
       page: 1
     };
   },
@@ -190,28 +140,6 @@ export default {
         subscribeToTicker(ticker.name, this.updateTicker);
       });
     }
-    this.loadingStatus = "loading";
-    try {
-      const coinList = await tickersAPI.getWholeCoinList();
-      const { Data } = await coinList;
-      let correctTickersFullNameList = [];
-      for (let t in Data) {
-        // eslint-disable-next-line no-prototype-builtins
-        if (Data.hasOwnProperty(t)) {
-          correctTickersFullNameList.push(Data[t].FullName);
-        }
-      }
-      this.kindOfTickers = correctTickersFullNameList;
-      this.loadingStatus = "success";
-    } catch (e) {
-      this.loadingStatus = "error";
-    }
-  },
-  mounted() {
-    window.addEventListener("resize", this.calculateMaxGraphElements);
-  },
-  beforeUnmount() {
-    window.removeEventListener("resize", this.calculateMaxGraphElements);
   },
   watch: {
     selectedTicker() {
@@ -255,16 +183,6 @@ export default {
     paginatedTickers() {
       return this.filteredTickers.slice(this.startIndex, this.endIndex);
     },
-    normalizedGraph() {
-      const maxValue = Math.max(...this.graph);
-      const minValue = Math.min(...this.graph);
-      if (minValue === maxValue) {
-        return this.graph.map(() => 50);
-      }
-      return this.graph.map(
-        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-      );
-    },
     pageStateOptions() {
       return {
         page: this.page,
@@ -273,11 +191,20 @@ export default {
     }
   },
   methods: {
-    calculateMaxGraphElements() {
-      if (this.$refs.graph.clientWidth) {
-        this.maxGraphElements =
-          this.$refs.graph.clientWidth / this.graphElementWidth;
-      }
+    unSelect() {
+      this.selectedTicker = null;
+    },
+    add(ticker) {
+      const currentTicker = {
+        name: ticker
+          .replace(/[^ \w]/g, "")
+          .toUpperCase()
+          .trim(),
+        price: "-"
+      };
+      this.tickers = [...this.tickers, currentTicker];
+      subscribeToTicker(currentTicker.name, this.updateTicker);
+      this.filter = "";
     },
     updateTicker(tickerName, newPrice) {
       this.tickers
@@ -286,7 +213,6 @@ export default {
           t.price = newPrice;
           if (t === this.selectedTicker) {
             this.graph.push(t.price);
-            debugger;
             if (this.graph.length > this.maxGraphElements) {
               this.graph = this.graph.slice(
                 this.graph.length - this.maxGraphElements
@@ -301,29 +227,6 @@ export default {
       }
       return price > 1 ? price?.toFixed(2) : price?.toPrecision(2);
     },
-    add() {
-      if (
-        this.tickers.filter(
-          (t) => t.name.toUpperCase() === this.ticker.toUpperCase()
-        ).length > 0
-      ) {
-        this.validationError = "This coin is already in exist";
-      } else {
-        const currentTicker = {
-          name: this.ticker
-            .replace(/[^ \w]/g, "")
-            .toUpperCase()
-            .trim(),
-          price: "-"
-        };
-        this.tickers = [...this.tickers, currentTicker];
-        subscribeToTicker(currentTicker.name, this.updateTicker);
-        this.hintsList = [];
-        this.ticker = "";
-        this.filter = "";
-      }
-    },
-
     select(ticker) {
       this.selectedTicker = ticker;
     },
@@ -335,28 +238,6 @@ export default {
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
-    },
-    hintsGenerator(e) {
-      if (this.ticker === "") {
-        this.hintsList = [];
-      }
-      if (e.code !== "Enter") {
-        this.validationError = "";
-      }
-      if (/^[a-zA-Z0-9_.-]*$/.test(this.ticker) && this.ticker) {
-        const hintsArr = this.kindOfTickers.filter(
-          (t) => t.indexOf(this.ticker.toUpperCase()) !== -1
-        );
-        this.hintsList = hintsArr
-          .splice(0, 4)
-          .map((t) => t.match(/\((.*?)\)/)[1]);
-      }
-    },
-    hintsUsingHandler(hint) {
-      this.ticker = hint;
-      this.add();
-      this.ticker = "";
-      this.hintsList = [];
     },
     pageChangeBtn(method) {
       switch (method) {
