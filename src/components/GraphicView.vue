@@ -47,7 +47,6 @@
 <script>
 export default {
   name: "GraphicView",
-  data() {},
   props: {
     selectedTicker: {
       type: Object || null,
@@ -71,9 +70,16 @@ export default {
       }
     }
   },
+  emits: {
+    mountGraphCalculate: (newGraphWidthFromRef) =>
+      typeof newGraphWidthFromRef === "number",
+    recalculateGraphWidth: (newGraphWidthFromRef) =>
+      typeof newGraphWidthFromRef === "number",
+    unSelectTicker: null
+  },
   mounted() {
-    this.$emit("mountGraphCalculate", this.$refs.graph.clientWidth);
     window.addEventListener("resize", this.changeSizeOfGraph);
+    this.$emit("mountGraphCalculate", this.$refs.graph.clientWidth);
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.changeSizeOfGraph);

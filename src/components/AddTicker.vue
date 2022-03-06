@@ -70,6 +70,10 @@ export default {
       }
     }
   },
+  emits: {
+    "add-ticker": (newTicker) =>
+      typeof newTicker === "string" && newTicker.length > 0
+  },
   async created() {
     this.loadingStatus = "loading";
     try {
@@ -118,8 +122,9 @@ export default {
         ).length > 0
       ) {
         this.validationError = "This coin is already in exist";
+      } else if (!this.ticker.length > 0) {
+        this.validationError = "Ticker field is empty but required";
       } else {
-        debugger;
         this.$emit("add-ticker", this.ticker);
         this.ticker = "";
         this.hintsList = [];
