@@ -76,8 +76,13 @@
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
       <graphic-view
+        v-if="selectedTicker"
         @unSelectTicker="unSelect"
+        @recalculateGraphWidth="calculateMaxGraphElements"
+        @mountGraphCalculate="calculateMaxGraphElements"
         :selectedTicker="selectedTicker"
+        :graphElementWidth="graphElementWidth"
+        :graph="graph"
       />
     </div>
   </div>
@@ -115,8 +120,10 @@ export default {
       filter: "",
       tickers: [],
       badTickers: BAD_TICKERS,
-      selectedTicker: null,
 
+      selectedTicker: null,
+      maxGraphElements: 1,
+      graphElementWidth: 38,
       graph: [],
 
       page: 1
@@ -144,7 +151,6 @@ export default {
   watch: {
     selectedTicker() {
       this.graph = [];
-      this.$nextTick().then(this.calculateMaxGraphElements);
     },
     filter() {
       this.page = 1;
@@ -220,6 +226,11 @@ export default {
             }
           }
         });
+    },
+    calculateMaxGraphElements(newClientWidth) {
+      if (newClientWidth) {
+        this.maxGraphElements = newClientWidth / this.graphElementWidth;
+      }
     },
     formatPrice(price) {
       if (price === "-") {

@@ -1,5 +1,5 @@
 <template>
-  <section v-if="selectedTicker" class="relative">
+  <section class="relative">
     <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
       {{ selectedTicker.name }} - USD
     </h3>
@@ -47,18 +47,7 @@
 <script>
 export default {
   name: "GraphicView",
-  mounted() {
-    window.addEventListener("resize", this.calculateMaxGraphElements);
-  },
-  beforeUnmount() {
-    window.removeEventListener("resize", this.calculateMaxGraphElements);
-  },
-  data() {
-    return {
-      maxGraphElements: 1,
-      graphElementWidth: 38
-    };
-  },
+  data() {},
   props: {
     selectedTicker: {
       type: Object || null,
@@ -66,7 +55,28 @@ export default {
       default() {
         return null;
       }
+    },
+    graph: {
+      type: Array,
+      required: false,
+      default() {
+        return [];
+      }
+    },
+    graphElementWidth: {
+      type: Number,
+      required: false,
+      default() {
+        return 1;
+      }
     }
+  },
+  mounted() {
+    this.$emit("mountGraphCalculate", this.$refs.graph.clientWidth);
+    window.addEventListener("resize", this.changeSizeOfGraph);
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.changeSizeOfGraph);
   },
   computed: {
     normalizedGraph() {
@@ -81,11 +91,8 @@ export default {
     }
   },
   methods: {
-    calculateMaxGraphElements() {
-      if (this.$refs.graph.clientWidth) {
-        this.maxGraphElements =
-          this.$refs.graph.clientWidth / this.graphElementWidth;
-      }
+    changeSizeOfGraph() {
+      this.$emit("recalculateGraphWidth", this.$refs.graph.clientWidth);
     }
   }
 };
